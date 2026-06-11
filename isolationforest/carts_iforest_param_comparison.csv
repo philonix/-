@@ -1,0 +1,6 @@
+points,fault_window_points,anomaly_points,tp,fp,fn,precision,recall,f1,anomaly_ratio,n_estimators,contamination,feature_set
+137,42,32,18,14,24,0.5625,0.4286,0.4865,0.2336,200,0.08,"cpu_rate,rolling_mean,rolling_std,abs_rate_change,pod_age_points,is_new_pod_window"
+137,42,32,18,14,24,0.5625,0.4286,0.4865,0.2336,300,0.08,"cpu_rate,rolling_mean,rolling_std,abs_rate_change,pod_age_points,is_new_pod_window"
+137,42,26,16,10,26,0.6154,0.381,0.4706,0.1898,200,0.05,"cpu_rate,rolling_mean,rolling_std,abs_rate_change,pod_age_points,is_new_pod_window"
+137,42,23,15,8,27,0.6522,0.3571,0.4615,0.1679,100,0.03,"cpu_rate,rolling_mean,rolling_std,abs_rate_change,pod_age_points,is_new_pod_window"
+137,42,24,15,9,27,0.625,0.3571,0.4545,0.1752,100,0.05,"cpu_rate,rolling_mean,rolling_std,abs_rate_change,pod_age_points,is_new_pod_window"

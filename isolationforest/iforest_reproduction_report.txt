@@ -1,0 +1,265 @@
+Isolation Forest 复现实验说明
+
+1. 实验目标
+
+本实验旨在基于 Sock Shop 微服务运行数据，复现经典 Isolation Forest 在无监督异常检测场景中的基本思路。实验的核心目标不是简单判断数值高低，而是使用正常数据学习系统的常态行为模式，再在故障数据中识别由 pod 被杀和重建带来的异常行为。
+
+本次实验聚焦的故障对象为 `carts` 服务，已知被人为杀死的 pod 为：
+
+- `carts-b6c5c87f9-cz2bq`
+
+实验目标如下：
+
+1. 使用 `normal.csv` 作为正常训练集。
+2. 使用 `fault.csv` 作为故障测试集。
+3. 基于 `container_cpu_usage_seconds_total` 构造适合 Isolation Forest 的时序特征。
+4. 检测 `carts` 服务在 pod 被杀和新 pod 重建过程中的异常点。
+5. 通过参数对比实验和特征对比实验，分析模型在当前数据上的最优配置。
+
+2. 数据说明
+
+本实验使用的数据文件位于 `isolationforest` 目录中：
+
+- `normal.csv`：正常运行阶段采集的数据。
+- `fault.csv`：在运行过程中人为杀死 `carts-b6c5c87f9-cz2bq` 后采集的数据。
+
+原始数据字段包括：
+
+- `timestamp`：采样时间戳，间隔为 15 秒。
+- `value`：Prometheus 指标值。
+- `metric`：Prometheus 返回的标签字典字符串。
+
+通过对 `metric` 字段解析，可得到：
+
+- `pod`
+- `service`
+
+其中 `fault.csv` 中出现了两个与 `carts` 服务相关的 pod：
+
+- 旧 pod：`carts-b6c5c87f9-cz2bq`
+- 新 pod：`carts-b6c5c87f9-gm7b5`
+
+这说明在故障窗口中确实发生了 pod 替换，因此故障采集数据是有效的。
+
+3. 方法设计
+
+3.1 为什么不能直接用原始 value
+
+实验使用的原始指标是 `container_cpu_usage_seconds_total`，这是一个累积型 counter。该指标会随时间单调增加，因此不适合直接作为异常检测输入。若直接使用原始值，模型更容易学习“时间越晚数值越大”的趋势，而不是学习真正的故障模式。
+
+因此，本实验先对每个 pod 分别按时间排序，再构造如下基础特征：
+
+1. `delta_time`：相邻采样点时间差。
+2. `delta_value`：相邻采样点指标差值。
+3. `cpu_rate = delta_value / delta_time`：近似 CPU 使用速率。
+
+同时，为增强对异常行为的识别能力，又构造了以下派生特征：
+
+1. `rolling_mean`：`cpu_rate` 的滑动均值。
+2. `rolling_std`：`cpu_rate` 的滑动标准差。
+3. `abs_rate_change`：相邻速率变化的绝对值。
+4. `pod_age_points`：当前 pod 出现后的采样点序号。
+5. `is_new_pod_window`：新 pod 刚启动的前若干采样点标记。
+
+3.2 训练与检测思路
+
+本实验采用经典的无监督异常检测流程：
+
+1. 使用 `normal.csv` 中 `carts` 服务的样本训练 Isolation Forest。
+2. 使用 `fault.csv` 中 `carts` 服务的样本进行预测。
+3. `predict()` 输出正常点或异常点。
+4. `decision_function()` 输出异常分数，分数越低代表越异常。
+
+3.3 故障窗口定义
+
+为了对模型结果进行更定量的评估，本实验根据被杀 pod 和新 pod 的时间关系自动推断出弱标签故障窗口。
+
+推断结果如下：
+
+- 新 pod 首次出现时间：`2026-06-11 07:40:45`
+- 被杀 pod 最后出现时间：`2026-06-11 07:44:45`
+- 设定的弱标签故障窗口：`2026-06-11 07:40:45 -> 2026-06-11 07:46:45`
+
+在后续评估中：
+
+- 落在故障窗口内且被检测为异常的点视为 `TP`
+- 落在故障窗口外但被检测为异常的点视为 `FP`
+- 落在故障窗口内但未被检测为异常的点视为 `FN`
+
+4. 参数对比实验
+
+4.1 对比设置
+
+在全特征条件下，本实验比较了以下参数组合：
+
+1. `n_estimators=100, contamination=0.03`
+2. `n_estimators=100, contamination=0.05`
+3. `n_estimators=200, contamination=0.05`
+4. `n_estimators=200, contamination=0.08`
+5. `n_estimators=300, contamination=0.08`
+
+参数对比结果保存在：
+
+- `carts_iforest_param_comparison.csv`
+
+4.2 参数对比结果
+
+实验结果如下：
+
+1. `100 / 0.03`
+   - precision = 0.6522
+   - recall = 0.3571
+   - f1 = 0.4615
+
+2. `100 / 0.05`
+   - precision = 0.6250
+   - recall = 0.3571
+   - f1 = 0.4545
+
+3. `200 / 0.05`
+   - precision = 0.6154
+   - recall = 0.3810
+   - f1 = 0.4706
+
+4. `200 / 0.08`
+   - precision = 0.5625
+   - recall = 0.4286
+   - f1 = 0.4865
+
+5. `300 / 0.08`
+   - precision = 0.5625
+   - recall = 0.4286
+   - f1 = 0.4865
+
+4.3 参数结论
+
+从实验结果看：
+
+1. `contamination=0.03` 时模型更保守，误报更少，因此 precision 更高。
+2. 随着 contamination 增大，模型更愿意判定异常，recall 有所提升。
+3. `n_estimators=200, contamination=0.08` 与 `300, 0.08` 的效果一致，说明继续增加树数量在当前数据上没有明显收益。
+
+综合 precision、recall 和 F1，本实验自动选出的当前最优参数为：
+
+- `n_estimators=200`
+- `contamination=0.08`
+
+其主要原因是该组合在当前故障窗口下取得了最高的 F1 值，能在误报与漏报之间取得较平衡的效果。
+
+5. 特征对比实验
+
+5.1 对比设置
+
+在最优参数 `n_estimators=200, contamination=0.08` 下，本实验进一步比较了 3 组特征：
+
+1. `rate_only`
+   - `cpu_rate`
+
+2. `rate_plus_rolling`
+   - `cpu_rate`
+   - `rolling_mean`
+   - `rolling_std`
+   - `abs_rate_change`
+
+3. `full_features`
+   - `cpu_rate`
+   - `rolling_mean`
+   - `rolling_std`
+   - `abs_rate_change`
+   - `pod_age_points`
+   - `is_new_pod_window`
+
+特征对比结果保存在：
+
+- `carts_iforest_feature_comparison.csv`
+
+5.2 特征对比结果
+
+1. `rate_only`
+   - precision = 0.6400
+   - recall = 0.3810
+   - f1 = 0.4776
+
+2. `rate_plus_rolling`
+   - precision = 0.5455
+   - recall = 0.4286
+   - f1 = 0.4800
+
+3. `full_features`
+   - precision = 0.5625
+   - recall = 0.4286
+   - f1 = 0.4865
+
+5.3 特征结论
+
+该组实验说明：
+
+1. `cpu_rate` 单特征已经具备较强的区分能力，因此其 precision 最高。
+2. 加入滑窗统计特征后，模型对故障窗口的覆盖能力有所提升，recall 提高，但误报也随之增加。
+3. 再加入 `pod_age_points` 和 `is_new_pod_window` 后，F1 达到最高，说明与新 pod 启动阶段相关的上下文信息确实对检测 pod 被杀后的重建行为有帮助。
+
+因此，本实验最终采用 `full_features` 作为推荐特征组合。
+
+6. 结果分析
+
+在当前最优配置下：
+
+- 参数：`n_estimators=200, contamination=0.08`
+- 特征：`full_features`
+
+实验结果如下：
+
+- 测试点数：137
+- 故障窗口点数：42
+- 异常点数：32
+- TP：18
+- FP：14
+- FN：24
+- precision：0.5625
+- recall：0.4286
+- f1：0.4865
+
+最异常的点集中在：
+
+- `2026-06-11 07:41:00`
+- `2026-06-11 07:41:15`
+- `2026-06-11 07:41:30`
+- `2026-06-11 07:40:45`
+
+这些时间点均位于新 pod `carts-b6c5c87f9-gm7b5` 刚启动的故障窗口内，说明模型已经能够对 pod 替换带来的异常行为产生响应。
+
+同时也可以看到，少量早期正常窗口中的点被误判为异常，这说明当前模型仍存在一定误报。这是无监督异常检测中的常见现象，也说明后续仍有进一步改进空间。
+
+7. 当前复现进度评价
+
+截至目前，本实验已经完成了一个较完整的 Isolation Forest 复现实验闭环，包括：
+
+1. 正常数据训练、故障数据测试。
+2. 从累积型 CPU 指标构造速率特征。
+3. 基于真实被杀 pod 推断故障窗口。
+4. 进行参数对比实验。
+5. 进行特征消融实验。
+6. 输出异常检测结果明细和可视化图。
+
+因此，可以认为当前已经完成了“基于真实微服务故障数据的 Isolation Forest 复现实验初版”。
+
+8. 后续可扩展方向
+
+如果后续还希望进一步增强论文复现的完整性，可以继续做以下扩展：
+
+1. 增加更多故障轮次数据，验证模型稳定性。
+2. 将实验从 `carts` 服务扩展到其他服务。
+3. 加入 memory、network、restart 等更多指标，构造多模态特征。
+4. 增加简单基线方法，例如阈值法或 Z-score，对比 Isolation Forest 的优势。
+5. 对故障窗口定义进行更精细的标注，以便进行更严格的定量评估。
+
+9. 结论
+
+本实验表明，Isolation Forest 可以在无监督条件下对 Sock Shop 微服务中由 pod 被杀和重建引起的异常行为进行检测。通过将原始累积型 CPU 指标转换为速率特征，并结合滑窗统计和新 pod 启动上下文特征，模型能够较好地捕捉故障窗口中的异常变化。
+
+在当前实验数据上：
+
+- 最优参数为 `n_estimators=200, contamination=0.08`
+- 最优特征组为 `full_features`
+
+虽然当前 F1 仍有提升空间，但模型已经能够有效识别新 pod 启动阶段的显著异常，说明该方法对当前 kill pod 场景具备实际可用性，也为后续继续扩展到更复杂的微服务异常检测实验提供了基础。

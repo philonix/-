@@ -1,0 +1,4 @@
+points,fault_window_points,anomaly_points,tp,fp,fn,precision,recall,f1,anomaly_ratio,n_estimators,contamination,feature_set,feature_name
+137,42,32,18,14,24,0.5625,0.4286,0.4865,0.2336,200,0.08,"cpu_rate,rolling_mean,rolling_std,abs_rate_change,pod_age_points,is_new_pod_window",full_features
+137,42,33,18,15,24,0.5455,0.4286,0.48,0.2409,200,0.08,"cpu_rate,rolling_mean,rolling_std,abs_rate_change",rate_plus_rolling
+137,42,25,16,9,26,0.64,0.381,0.4776,0.1825,200,0.08,cpu_rate,rate_only
