@@ -1,0 +1,6 @@
+﻿version,selection_mode,contamination,postprocess_name,postprocess_min_streak,postprocess_smooth_window,postprocess_vote_threshold,avg_precision,avg_recall,avg_f1,avg_anomaly_ratio,event_hit_rate,kill_hit_rate,pause_hit_rate
+V2,fixed_main,0.08,streak_2,2,1,1,0.0639,0.3703,0.1072,0.353,0.7778,,
+V3,coverage_best,0.12,streak_2_smooth_3_vote_2,2,3,2,0.0557,0.5849,0.1011,0.6275,1.0,,
+V3,balanced_best,0.02,streak_3,3,1,1,0.1628,0.1433,0.1184,0.1424,0.4444,,
+V4,coverage_best,0.12,streak_2_smooth_5_vote_2,2,5,2,0.0574,0.6788,0.1055,0.7187,1.0,1.0,1.0
+V4,fault_aware_best,0.08,streak_3,3,1,1,0.0701,0.3941,0.1158,0.3495,0.7778,0.8,0.75

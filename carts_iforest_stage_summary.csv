@@ -1,0 +1,4 @@
+stage,best_n_estimators,best_contamination,selected_feature_set,avg_precision,avg_recall,avg_f1,avg_anomaly_ratio
+validation_best_params,300,0.08,rate_plus_rolling,0.0753,0.4896,0.1291,0.4015
+test,300,0.08,rate_plus_rolling,0.0849,0.2665,0.1272,0.2148
+challenge,300,0.08,rate_plus_rolling,0.0941,0.2567,0.1343,0.2128

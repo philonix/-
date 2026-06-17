@@ -1,0 +1,399 @@
+Isolation Forest 冻结模型后的最终实验总报告
+
+1. 实验背景
+
+本实验围绕 Sock Shop 微服务场景中的 carts 服务展开，目标是在 Prometheus 导出的运行时指标上复现并改进 Isolation Forest 异常检测流程。
+
+本批数据具有以下特点：
+
+1. 每轮实验包含多次故障注入
+2. 故障类型以 kill 和 pause 为主
+3. 单轮实验中事件较密集，cooldown 较短
+4. 故障效应、恢复效应与相邻事件容易重叠
+
+因此，本实验的重点不只是判断模型能否检测异常，而是回答以下问题：
+
+1. 模型能否稳定定位故障事件
+2. 模型能否控制故障邻域误报
+3. 不同分析版本在事件覆盖、误报控制与故障类型公平性之间如何取舍
+
+2. 数据划分
+
+本实验沿用统一的数据划分：
+
+1. 训练集：run_normal_001 ~ run_normal_003
+2. 验证集：run_001、run_003、run_005
+3. 测试集：run_002、run_004、run_006
+4. 挑战集：run_007、run_008、run_009、run_010
+
+训练集用于学习正常行为分布，验证集用于选型，测试集和挑战集用于评估不同版本的泛化能力。
+
+3. V1 基线结果与问题发现
+
+V1 是原始基线版本，最优配置为：
+
+1. n_estimators = 300
+2. contamination = 0.08
+3. feature_set = rate_plus_rolling
+
+V1 阶段结果：
+
+1. validation：precision=0.0753，recall=0.4896，f1=0.1291，anomaly_ratio=0.4015
+2. test：precision=0.0849，recall=0.2665，f1=0.1272，anomaly_ratio=0.2148
+3. challenge：precision=0.0941，recall=0.2567，f1=0.1343，anomaly_ratio=0.2128
+
+V1 暴露出的核心问题不是完全检测不到故障，而是：
+
+1. 模型通常能在故障段附近产生响应
+2. 但会把故障前后的大量正常点一并判为异常
+3. 因此 precision 偏低，异常边界较宽
+
+换句话说，V1 更像一个“故障区域粗定位工具”，尚未形成稳定、可控的异常边界。
+
+4. 版本化改进过程
+
+4.1 V2：从点级评估推进到事件级评估
+
+V2 在不改原始数据的前提下加入两类分析层优化：
+
+1. 连续异常后处理，仅保留连续异常长度 >= 2 的片段
+2. 事件级评估，在点级指标之外引入 event_hit_rate
+
+V2 最优配置为：
+
+1. n_estimators = 300
+2. contamination = 0.08
+3. feature_set = full_features
+4. postprocess = streak_2
+
+V2 阶段结果：
+
+1. validation：precision=0.0639，recall=0.3703，f1=0.1072，event_hit_rate=0.7778
+2. test：precision=0.1066，recall=0.3707，f1=0.1571，event_hit_rate=0.7778
+3. challenge：precision=0.0903，recall=0.3618，f1=0.1421，event_hit_rate=0.6667
+
+V2 说明：
+
+1. 基础后处理和事件级评估是有效的
+2. 模型在测试集和挑战集上的综合表现优于 V1
+3. 但误报问题并没有被根本解决
+
+4.2 V3：以误报控制为核心的平衡版本
+
+V3 的目标是重新评估当前实验设计下参数是否合理，尤其是：
+
+1. contamination 是否应该继续维持在较高水平
+2. min_streak=2 是否过于宽松
+3. 更高覆盖是否在牺牲过多 precision
+
+V3 做了以下关键调整：
+
+1. 扩大 n_estimators 与 contamination 搜索范围
+2. 扩大 streak、平滑窗口和投票阈值搜索范围
+3. 引入窗口覆盖率分析，重新解释当前实验设计下异常比例
+4. 将结论拆成 coverage_best 和 balanced_best 两类候选
+
+V3 最终主配置为：
+
+1. n_estimators = 100
+2. contamination = 0.02
+3. feature_set = full_features
+4. postprocess = streak_3
+
+V3 阶段结果：
+
+1. validation：precision=0.1628，recall=0.1433，f1=0.1184，anomaly_ratio=0.1424，event_hit_rate=0.4444
+2. test：precision=0.3837，recall=0.1506，f1=0.1838，anomaly_ratio=0.0890，event_hit_rate=0.4444
+3. challenge：precision=0.1340，recall=0.2268，f1=0.1646，anomaly_ratio=0.1343，event_hit_rate=0.5833
+
+V3 的关键价值在于：
+
+1. 它显著收缩了异常边界
+2. 它把 test 和 challenge 的点级 F1 都推进到当前较优水平
+3. 它用更低的 anomaly_ratio 换来了更高的 precision
+4. 它更符合“故障邻域误报控制”的主目标
+
+4.3 V4：面向 pause 的 fault-aware 补充版本
+
+在分析 V3 的事件明细后可以发现：
+
+1. kill 故障比 pause 更容易命中
+2. V3 更严格的平衡策略会进一步压制 pause 信号
+
+因此，V4 不再只看 overall 指标，而是在选型时显式加入：
+
+1. kill_hit_rate
+2. pause_hit_rate
+
+V4 最终主配置为：
+
+1. n_estimators = 100
+2. contamination = 0.08
+3. feature_set = full_features
+4. postprocess = streak_3
+
+V4 阶段结果：
+
+1. validation：precision=0.0701，recall=0.3941，f1=0.1158，anomaly_ratio=0.3495，event_hit_rate=0.7778，kill_hit_rate=0.8，pause_hit_rate=0.75
+2. test：precision=0.1475，recall=0.3707，f1=0.1861，anomaly_ratio=0.2280，event_hit_rate=0.7778，kill_hit_rate=1.0，pause_hit_rate=0.5
+3. challenge：precision=0.0971，recall=0.3618，f1=0.1493，anomaly_ratio=0.2764，event_hit_rate=0.6667，kill_hit_rate=0.8333，pause_hit_rate=0.5
+
+V4 说明：
+
+1. 它确实改善了 pause 的系统性弱项
+2. 它在 test 集 F1 上略高于 V3
+3. 但它的 precision 和 anomaly_ratio 明显差于 V3
+4. 它在 challenge 集 F1 上低于 V3
+
+5. 统一对比结论
+
+从 V1 到 V4，模型演化逻辑可以概括为：
+
+1. V1 证明模型具有粗定位能力
+2. V2 证明事件级评估和基础后处理有效
+3. V3 解决了“故障邻域误报过多”的核心问题
+4. V4 证明了 fault-aware 选型能够改善 pause 弱项
+
+关键定量结果如下：
+
+test 集 F1：
+
+1. V1 = 0.1272
+2. V2 = 0.1571
+3. V3 = 0.1838
+4. V4 = 0.1861
+
+challenge 集 F1：
+
+1. V1 = 0.1343
+2. V2 = 0.1421
+3. V3 = 0.1646
+4. V4 = 0.1493
+
+test 集 anomaly_ratio：
+
+1. V1 = 0.2148
+2. V3 = 0.0890
+3. V4 = 0.2280
+
+challenge 集 anomaly_ratio：
+
+1. V1 = 0.2128
+2. V3 = 0.1343
+3. V4 = 0.2764
+
+这说明：
+
+1. V3 在 test 和 challenge 上形成了最稳健的误报控制平衡
+2. V4 的收益主要集中在事件覆盖和 pause 命中
+3. V4 的代价是误报和异常比例显著回升
+
+6. 消融实验结论
+
+6.1 特征消融
+
+特征消融结果表明：
+
+1. 在 V1 基线阶段，rate_plus_rolling 的 avg_f1 = 0.1361，高于 full_features 的 0.1291
+2. 进入 V3/V4 后，full_features 成为最优特征组
+3. V3 中 full_features 的 avg_f1 = 0.1184，stat_enhanced 为 0.1066
+4. V4 中 full_features 的 avg_f1 = 0.1158，rate_plus_rolling 为 0.0857
+
+这说明：
+
+1. 轻量 CPU 侧特征足以支撑早期粗定位
+2. 但在误报控制和 fault-aware 选型阶段，full_features 更稳定
+3. 因此最终主版本应保留 full_features
+
+6.2 后处理消融
+
+后处理对比表明：
+
+1. streak_2 和更强平滑策略能显著抬高 event_hit_rate
+2. 但也会把 anomaly_ratio 推到 0.55~0.72 的高位
+3. V3 的 balanced_best 选择了 streak_3，anomaly_ratio 仅为 0.1424
+4. V4 的 fault_aware_best 虽然保留了 streak_3，但 contamination 提高到 0.08，anomaly_ratio 仍升到 0.3495
+
+因此，当前最合理的后处理结论是：
+
+1. 主版本仍应选择 `streak_3 + 尽量少平滑`
+2. 高覆盖配置可以作为上界参考，但不适合作为主版本
+
+7. 稳健性与误差分析
+
+从 test 和 challenge 的差异看：
+
+1. V3 在 challenge 集上的退化幅度小于 V4
+2. V4 更容易受到复杂场景影响
+3. 因此如果实验强调泛化稳定性，主版本必须优先考虑 V3
+
+困难轮次方面：
+
+1. run_009 和 run_010 是当前最困难的典型轮次
+2. 尤其是 run_010，在 V1/V2/V3/V4 中都偏难
+3. 说明问题不只是参数设置，而是复合故障、恢复段重叠和相邻事件干扰共同作用的结果
+
+这也说明：
+
+1. 当前模型的上限主要受复杂恢复段和相邻故障重叠段影响
+2. 这类问题不能通过简单继续增大 contamination 来解决
+
+8. 定量结论
+
+基于当前统一对比结果，可以得到以下定量结论。
+
+第一类结论：版本化优化整体有效。
+
+1. V1 -> V2，test F1 从 0.1272 提升到 0.1571，提升约 23.5%
+2. V1 -> V2，challenge F1 从 0.1343 提升到 0.1421，提升约 5.8%
+3. 这说明仅通过后处理与事件级评估，模型整体效果已经能够进一步提升
+
+第二类结论：V3 是当前误报控制最有效的主版本。
+
+1. V1 -> V3，test F1 从 0.1272 提升到 0.1838，提升约 44.5%
+2. V1 -> V3，challenge F1 从 0.1343 提升到 0.1646，提升约 22.6%
+3. V1 -> V3，test anomaly_ratio 从 0.2148 降到 0.0890，下降约 58.6%
+4. V1 -> V3，challenge anomaly_ratio 从 0.2128 降到 0.1343，下降约 36.9%
+5. V2 -> V3，test precision 从 0.1066 提升到 0.3837，提升约 259.9%
+6. V2 -> V3，test F1 从 0.1571 提升到 0.1838，提升约 17.0%
+7. V2 -> V3，challenge F1 从 0.1421 提升到 0.1646，提升约 15.8%
+
+这些结果说明：
+
+1. V3 不只是综合指标更高，而且异常比例显著降低
+2. V3 已经实现了“更高 F1 + 更低异常比例”的双重改进
+3. 因此 V3 是当前最符合误报控制目标的版本
+
+第三类结论：V4 的改进方向是有效的，但仍然是补充版本。
+
+1. V3 -> V4，test F1 从 0.1838 小幅升到 0.1861，提升约 1.3%
+2. V3 -> V4，challenge F1 从 0.1646 降到 0.1493，下降约 9.3%
+3. V3 -> V4，test anomaly_ratio 从 0.0890 升到 0.2280，增加约 156.2%
+4. V3 -> V4，challenge anomaly_ratio 从 0.1343 升到 0.2764，增加约 105.8%
+5. V3 -> V4，test pause_hit_rate 从 0.25 升到 0.50，提升 100%
+6. V3 -> V4，challenge pause_hit_rate 从 0.3333 升到 0.50，提升约 50.0%
+
+这些结果说明：
+
+1. V4 确实提升了 pause 类型故障的命中能力
+2. V4 也保持了更高的事件覆盖率
+3. 但这种改进是通过显著放宽异常边界获得的
+4. 由于 challenge 集 F1 回落，因此 V4 目前仍不能替代 V3
+
+第四类结论：当前模型已经具备可报告的定量分析闭环。
+
+1. 在点级指标上，V3 同时提高了 test 和 challenge 的 F1
+2. 在异常比例上，V3 相比 V1 和 V4 都更低
+3. 在事件级指标上，V2 和 V4 显示出更强覆盖，V3 显示出更强误报控制
+4. 在故障类型指标上，V4 证明了 pause 确实是可优化的方向
+
+因此，本实验的定量结论可以正式表述为：
+
+1. Isolation Forest 在当前 Sock Shop 故障注入数据上能够实现有效的故障区域检测
+2. 经过版本化优化后，V3 在 test 与 challenge 上取得了当前最平衡的综合结果
+3. V3 相比基线 V1 在 test F1 上提升约 44.5%，在 challenge F1 上提升约 22.6%，并显著降低异常比例
+4. V4 将 pause_hit_rate 进一步提升，但代价是 challenge 泛化和异常比例恶化
+5. 因此当前最终主版本应选择 V3，V4 作为 pause-aware 补充版本保留
+
+9. 最终版本结论
+
+基于统一对比、消融和稳健性分析，当前最终版本建议如下：
+
+1. 主版本：V3
+2. 补充版本：V4
+
+选择 V3 作为主版本的原因是：
+
+1. 它在 test 和 challenge 上都有更稳健的综合结果
+2. 它的 precision 明显高于 V2 和 V4
+3. 它的 anomaly_ratio 最低，最符合误报控制目标
+4. 它在复杂场景下的泛化稳定性优于 V4
+
+保留 V4 的原因是：
+
+1. 它证明了 fault-aware 选型是有效的
+2. 它显著改善了 pause_hit_rate
+3. 它为后续做 pause 专项优化提供了方向
+
+因此，最合适的表达不是“V4 失败”，而是：
+
+1. V4 是一个有研究价值的专项补充版本
+2. V3 才是当前更适合作为最终主结果展示的主版本
+
+10. 后续工作建议
+
+在模型优化暂时停止的前提下，后续工作建议集中在以下三点：
+
+1. pause 专项特征设计
+2. 更细粒度的局部后处理策略
+3. 对 run_009 / run_010 这类复杂轮次的误报来源做更细致分析
+
+11. 结论
+
+本实验已经从“Isolation Forest 能否检测故障”推进到“不同分析版本如何在误报控制、事件覆盖和故障类型公平性之间取得平衡”。在这一过程中，V1 提供了粗定位基线，V2 引入了事件级视角，V3 成为当前最稳健的主版本，V4 则进一步说明了面向 pause 弱项的 fault-aware 路线具有研究价值。
+
+一句话总结：
+
+当前最合理的最终结论是，V3 作为主版本用于正式结果展示，V4 作为专项补充版本用于说明 pause 弱项修复方向，而后续实验的重点应放在复杂场景误报来源分析，而不是继续扩大调参范围。
+
+12. 附录：结果文件说明
+
+为便于复核本报告中的定量结论，相关结果文件统一整理在：
+
+e:\code\PycharmProjects\software_test\isolationforest\followup_experiments_frozen_model
+
+其中核心文件如下。
+
+文本文件：
+
+1. integrated_final_experiment_report.txt
+   - 冻结模型后的最终实验总报告
+2. version_comparison_summary.txt
+   - V1/V2/V3/V4 版本对比总结
+3. ablation_and_robustness_summary.txt
+   - 消融实验与稳健性分析说明
+4. final_report_outline.txt
+   - 最终报告结构草案
+5. overview.txt
+   - 本目录内容总览
+
+表格文件：
+
+1. tables/v1_to_v4_stage_comparison.csv
+   - 统一版本阶段级结果对比表
+2. tables/feature_ablation_comparison.csv
+   - 特征消融结果汇总表
+3. tables/postprocess_tradeoff_summary.csv
+   - 后处理与覆盖率取舍结果汇总表
+
+图形文件：
+
+1. figures/v1_to_v4_stage_comparison.png
+   - V1 到 V4 的关键阶段指标对比图
+2. figures/feature_ablation_comparison.png
+   - 特征消融对比图
+3. figures/postprocess_tradeoff_comparison.png
+   - 后处理取舍对比图
+4. figures/final_recommendation_summary.png
+   - 主版本推荐总结图
+5. figures/v1_test_plot.png 与 figures/v1_challenge_plot.png
+   - V1 时序结果图
+6. figures/v2_test_plot.png 与 figures/v2_challenge_plot.png
+   - V2 时序结果图
+7. figures/v3_test_plot.png 与 figures/v3_challenge_plot.png
+   - V3 时序结果图
+8. figures/v4_test_plot.png 与 figures/v4_challenge_plot.png
+   - V4 时序结果图
+9. figures/refined_diagnostic_overview.png 与 figures/refined_run_breakdown.png
+   - 早期精炼分析图
+
+辅助脚本：
+
+1. generate_summary_assets.py
+   - 用于重新生成本目录中的汇总表和汇总图
+
+附录说明：
+
+1. 若需要复查主版本选择依据，优先查看 v1_to_v4_stage_comparison.csv 和 final_recommendation_summary.png
+2. 若需要复查消融结论，优先查看 feature_ablation_comparison.csv、postprocess_tradeoff_summary.csv 及对应图
+3. 若需要复查时序落点现象，优先查看 v1~v4 的 test/challenge 图

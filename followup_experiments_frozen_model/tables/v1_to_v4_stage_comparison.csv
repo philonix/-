@@ -1,0 +1,13 @@
+version,stage,n_estimators,contamination,feature_set,postprocess,avg_precision,avg_recall,avg_f1,avg_anomaly_ratio,event_hit_rate,kill_hit_rate,pause_hit_rate,positioning
+V1,validation,300,0.08,rate_plus_rolling,none,0.0753,0.4896,0.1291,0.4015,N/A,N/A,N/A,original baseline
+V1,test,300,0.08,rate_plus_rolling,none,0.0849,0.2665,0.1272,0.2148,N/A,N/A,N/A,original baseline
+V1,challenge,300,0.08,rate_plus_rolling,none,0.0941,0.2567,0.1343,0.2128,N/A,N/A,N/A,original baseline
+V2,validation,300,0.08,full_features,streak_2,0.0639,0.3703,0.1072,N/A,0.7778,N/A,N/A,event-aware improvement
+V2,test,300,0.08,full_features,streak_2,0.1066,0.3707,0.1571,N/A,0.7778,1.0,0.5,event-aware improvement
+V2,challenge,300,0.08,full_features,streak_2,0.0903,0.3618,0.1421,N/A,0.6667,0.8333,0.5,event-aware improvement
+V3,validation,100,0.02,full_features,streak_3,0.1628,0.1433,0.1184,0.1424,0.4444,0.6,0.25,balanced main version
+V3,test,100,0.02,full_features,streak_3,0.3837,0.1506,0.1838,0.0890,0.4444,0.6,0.25,balanced main version
+V3,challenge,100,0.02,full_features,streak_3,0.1340,0.2268,0.1646,0.1343,0.5833,0.8333,0.3333,balanced main version
+V4,validation,100,0.08,full_features,streak_3,0.0701,0.3941,0.1158,0.3495,0.7778,0.8,0.75,fault-aware supplemental version
+V4,test,100,0.08,full_features,streak_3,0.1475,0.3707,0.1861,0.2280,0.7778,1.0,0.5,fault-aware supplemental version
+V4,challenge,100,0.08,full_features,streak_3,0.0971,0.3618,0.1493,0.2764,0.6667,0.8333,0.5,fault-aware supplemental version

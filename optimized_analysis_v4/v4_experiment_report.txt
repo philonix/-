@@ -1,0 +1,330 @@
+Isolation Forest V4 版本实验报告
+
+1. 实验背景
+
+V4 是在 V3 基础上的下一版优化。
+
+V3 已经证明，通过收紧参数和后处理，可以明显控制误报，并在 test 与 challenge 上获得比 V2 更高的点级 F1；但与此同时，V3 也暴露出一个新的结构性问题：
+
+1. kill 类型故障更容易命中
+2. pause 类型故障命中率明显偏低
+3. 在更严格的平衡策略下，pause 信号容易被进一步压掉
+
+因此，V4 的目标不再是单纯继续压误报，也不是重新回到高 contamination 的高覆盖路线，而是尝试在选型阶段显式考虑不同故障类型，尤其是不让 pause 在候选配置筛选时被系统性牺牲。
+
+2. 数据划分
+
+V4 延续 V3 的既有数据划分，不修改原始实验数据：
+
+1. 训练集：run_normal_001 ~ run_normal_003
+2. 验证集：run_001、run_003、run_005
+3. 测试集：run_002、run_004、run_006
+4. 挑战集：run_007、run_008、run_009、run_010
+
+分析对象继续聚焦于 carts 服务。
+
+3. V4 的方法调整
+
+相比 V3，V4 的改动重点不在特征提取主框架，而在参数选择逻辑。
+
+第一类：延续 V3 的联合搜索框架
+
+1. 继续联合搜索 n_estimators、contamination、后处理组合
+2. 继续保留 full_features 等多组特征对比
+3. 继续保留 streak 与平滑投票后处理搜索
+
+第二类：加入 fault-aware 指标
+
+V4 在验证集评估时，不再只看 overall 指标，而是显式增加：
+
+1. kill_hit_rate
+2. pause_hit_rate
+
+这样做的原因是：
+
+1. overall event_hit_rate 不能反映不同故障类型是否失衡
+2. 如果某组配置只擅长 kill，但系统性漏掉 pause，那么它并不是真正更优的主配置
+3. 当前实验目标已经从“是否能打到异常”进一步提升到“不同故障类型是否都具备基本识别能力”
+
+第三类：增加 fault-aware 主配置筛选逻辑
+
+V4 在验证集选主配置时采用以下思路：
+
+1. 先限制 avg_anomaly_ratio <= 0.4，避免异常比例失控
+2. 若存在 pause_hit_rate > 0 的候选，优先保留这些候选
+3. 在剩余候选中优先按 pause_hit_rate 排序
+4. 再综合考虑 avg_f1、avg_precision、event_hit_rate、kill_hit_rate 和 anomaly_ratio
+
+这意味着 V4 的主配置不是“全局最宽松”的配置，而是“在异常比例仍可接受的前提下，对 pause 更友好”的配置。
+
+4. 覆盖率与参数合理性背景
+
+validation 集覆盖率情况延续 V3 的结论：
+
+1. 严格故障窗口覆盖率 = 0.0639
+2. +/-120 秒扩展后覆盖率 = 0.3151
+
+这说明：
+
+1. 仅看严格故障窗口，异常点占比仍然较低
+2. 但由于事件密集、冷却时间短，故障影响邻域会明显扩展
+3. 因此 contamination 不能只按严格窗口占比来设定
+4. 同时 contamination 也不能过高，否则会把恢复段和相邻正常段大量误判为异常
+
+V4 的策略不是否定 V3 对误报控制的判断，而是在这一判断基础上，为 pause 类型争取更合理的检测机会。
+
+5. 两类代表配置
+
+V4 最终得到两类代表性配置。
+
+高覆盖配置：
+
+1. n_estimators = 300
+2. contamination = 0.12
+3. postprocess = streak_2_smooth_5_vote_2
+4. validation precision = 0.0574
+5. validation recall = 0.6788
+6. validation f1 = 0.1055
+7. validation event_hit_rate = 1.0000
+8. validation kill_hit_rate = 1.0000
+9. validation pause_hit_rate = 1.0000
+10. validation anomaly_ratio = 0.7187
+
+fault-aware 主配置：
+
+1. n_estimators = 100
+2. contamination = 0.08
+3. feature_set = full_features
+4. postprocess = streak_3
+5. min_streak = 3
+6. smooth_window = 1
+7. vote_threshold = 1
+8. validation precision = 0.0701
+9. validation recall = 0.3941
+10. validation f1 = 0.1158
+11. validation event_hit_rate = 0.7778
+12. validation kill_hit_rate = 0.8000
+13. validation pause_hit_rate = 0.7500
+14. validation anomaly_ratio = 0.3495
+
+为什么最终不选择高覆盖配置？
+
+原因同样很明确：
+
+1. 它确实能把 kill 和 pause 都几乎完全命中
+2. 但异常比例高达 0.7187
+3. 这意味着大量正常点会被一并打成异常
+4. 对当前实验而言，这已经超出“可接受的异常比例”范围
+5. 因此它更适合作为上界参考，而不适合作为主版本
+
+6. V4 最终推荐配置
+
+V4 最终主推荐配置为：
+
+1. n_estimators = 100
+2. contamination = 0.08
+3. feature_set = full_features
+4. postprocess = streak_3
+5. min_streak = 3
+6. smooth_window = 1
+7. vote_threshold = 1
+
+可以看出，V4 并没有放弃 V3 中已经证明有效的 `streak_3` 平衡后处理，而是主要通过更高的 contamination 和新的选型逻辑，重新给 pause 留出检测空间。
+
+7. V4 阶段级结果
+
+V4 最终推荐配置的阶段级结果如下：
+
+validation：
+
+1. precision = 0.0701
+2. recall = 0.3941
+3. f1 = 0.1158
+4. anomaly_ratio = 0.3495
+5. event_hit_rate = 0.7778
+6. kill_hit_rate = 0.8000
+7. pause_hit_rate = 0.7500
+
+test：
+
+1. precision = 0.1475
+2. recall = 0.3707
+3. f1 = 0.1861
+4. anomaly_ratio = 0.2280
+5. event_hit_rate = 0.7778
+6. kill_hit_rate = 1.0000
+7. pause_hit_rate = 0.5000
+
+challenge：
+
+1. precision = 0.0971
+2. recall = 0.3618
+3. f1 = 0.1493
+4. anomaly_ratio = 0.2764
+5. event_hit_rate = 0.6667
+6. kill_hit_rate = 0.8333
+7. pause_hit_rate = 0.5000
+
+8. 与 V3 的对比
+
+V3 的最终主配置为：
+
+1. n_estimators = 100
+2. contamination = 0.02
+3. feature_set = full_features
+4. postprocess = streak_3
+
+V3 与 V4 的阶段级结果对比如下。
+
+validation：
+
+1. precision：0.1628 -> 0.0701
+2. recall：0.1433 -> 0.3941
+3. f1：0.1184 -> 0.1158
+4. anomaly_ratio：0.1424 -> 0.3495
+5. event_hit_rate：0.4444 -> 0.7778
+6. kill_hit_rate：0.6000 -> 0.8000
+7. pause_hit_rate：0.2500 -> 0.7500
+
+test：
+
+1. precision：0.3837 -> 0.1475
+2. recall：0.1506 -> 0.3707
+3. f1：0.1838 -> 0.1861
+4. anomaly_ratio：0.0890 -> 0.2280
+5. event_hit_rate：0.4444 -> 0.7778
+6. kill_hit_rate：0.6000 -> 1.0000
+7. pause_hit_rate：0.2500 -> 0.5000
+
+challenge：
+
+1. precision：0.1340 -> 0.0971
+2. recall：0.2268 -> 0.3618
+3. f1：0.1646 -> 0.1493
+4. anomaly_ratio：0.1343 -> 0.2764
+5. event_hit_rate：0.5833 -> 0.6667
+6. kill_hit_rate：0.8333 -> 0.8333
+7. pause_hit_rate：0.3333 -> 0.5000
+
+这个对比说明：
+
+1. V4 明显提升了 pause 命中率
+2. V4 也明显提升了 overall event_hit_rate
+3. 但这种提升主要通过抬高 recall 与 anomaly_ratio 得到
+4. test 上 V4 的 f1 略高于 V3
+5. challenge 上 V4 的 f1 反而低于 V3
+6. 因此 V4 目前更像面向 pause 的修正版，而不是已经稳定超越 V3 的统一主版本
+
+9. 分轮次结果分析
+
+test 集逐轮结果：
+
+1. run_002：precision=0.0667，recall=0.1538，f1=0.0930
+2. run_004：precision=0.0901，recall=0.6250，f1=0.1575
+3. run_006：precision=0.2857，recall=0.3333，f1=0.3077
+
+与 V3 相比：
+
+1. run_002 的 f1 变化很小，但误报更多
+2. run_004 recall 提升明显，同时 anomaly_ratio 也从 0.2033 升到 0.4512
+3. run_006 的 precision 明显回落，但 recall 有回补
+
+challenge 集逐轮结果：
+
+1. run_007：precision=0.1556，recall=0.3333，f1=0.2121
+2. run_008：precision=0.1111，recall=0.5263，f1=0.1835
+3. run_009：precision=0.0822，recall=0.4000，f1=0.1364
+4. run_010：precision=0.0395，recall=0.1875，f1=0.0652
+
+与 V3 相比：
+
+1. run_009 的 recall 和事件命中有所改善
+2. run_010 依旧最难，且误报进一步增多
+3. challenge 的整体难点仍然集中在复杂、重叠、恢复段较长的轮次
+
+10. 事件级结果分析
+
+test 集事件级命中：
+
+1. overall hit rate = 0.7778
+2. run_002 = 1.0000
+3. run_004 = 1.0000
+4. run_006 = 0.3333
+5. kill = 1.0000
+6. pause = 0.5000
+
+challenge 集事件级命中：
+
+1. overall hit rate = 0.6667
+2. run_007 = 0.6667
+3. run_008 = 1.0000
+4. run_009 = 0.6667
+5. run_010 = 0.3333
+6. kill = 0.8333
+7. pause = 0.5000
+
+与 V3 相比最重要的变化是：
+
+1. test pause_hit_rate：0.2500 -> 0.5000
+2. challenge pause_hit_rate：0.3333 -> 0.5000
+3. test overall hit_rate：0.4444 -> 0.7778
+4. challenge overall hit_rate：0.5833 -> 0.6667
+
+这说明 V4 的 fault-aware 选型确实起到了作用，至少证明 pause 的问题并不是“完全无特征可学”，而是会被更保守的主配置筛选逻辑压掉。
+
+11. 特征结果分析
+
+V4 的验证集特征比较结果显示：
+
+1. full_features 仍然是主配置最优特征组
+2. stat_enhanced 与 rate_plus_rolling 虽然能保留部分 pause_hit_rate，但整体分数仍低于 full_features
+3. cpu_memory 组合异常比例更低，但 event_hit_rate 和 pause_hit_rate 都更弱
+4. rate_only 最差，pause_hit_rate 直接降到 0
+
+这说明：
+
+1. pause 的识别不能只依赖 CPU 速率本身
+2. 内存、滚动统计、EMA、relative-to-mean、pod 生命周期类特征一起使用更有效
+3. V4 的问题不主要在“特征完全错误”，而更像是“如何在召回 pause 时不过度扩大误报”
+
+12. 对当前版本的总体判断
+
+V4 的定位已经比较清晰：
+
+1. 它证明了 fault-aware 选型是有效的
+2. 它成功改善了 pause 的系统性弱项
+3. 它让 test 集的点级 F1 小幅高于 V3
+4. 但它也带来了更高的异常比例和更低的 precision
+5. 在 challenge 集上，它还没有稳定超过 V3
+
+因此，当前更合理的版本判断是：
+
+1. V3 仍然是更稳健的主版本候选
+2. V4 是一个有研究价值的定向修正版
+3. 如果你的论文或报告强调“误报控制”和“泛化稳定性”，当前主版本仍建议选 V3
+4. 如果你要专门论证“针对 pause 弱项的分类型优化思路”，那么 V4 是很有价值的补充版本
+
+13. 当前不足
+
+V4 仍然存在以下问题：
+
+1. precision 明显低于 V3
+2. anomaly_ratio 明显高于 V3
+3. challenge 集 F1 回落
+4. run_010 等复杂轮次仍然表现较差
+5. pause 虽然改善，但仍未达到稳定高命中
+
+14. 下一版建议
+
+基于 V4 的结果，下一版最值得做的方向不是简单继续升高 contamination，而是更细粒度地处理 pause。
+
+建议优先考虑：
+
+1. pause 专项特征实验
+2. 针对 pause 的局部窗口或延迟响应评估
+3. 双轨主版本设计：V3 作为稳健主版本，V4 作为 pause-aware 补充版本
+4. 针对 challenge 复杂轮次单独分析误报来源，尤其是恢复段与相邻故障重叠段
+
+一句话总结：
+
+V4 已经证明，通过 fault-aware 选型可以明显改善 pause 弱项，并在 test 集保持住总体 F1；但它尚未在 challenge 集上形成稳定优势，因此当前更适合作为“分类型优化验证版”，而不是直接取代 V3 的最终主版本。

@@ -1,0 +1,131 @@
+最终实验报告结构建议
+
+1. 实验背景
+
+建议说明以下背景：
+
+1. 故障注入对象为 Sock Shop 的 carts 服务
+2. 训练集、验证集、测试集、挑战集的划分方式
+3. 每轮实验存在多事件、短 cooldown、故障效应重叠的特点
+4. 当前研究目标不是简单检测“是否异常”，而是比较不同分析版本在误报控制、事件覆盖和故障类型识别上的差异
+
+2. 基线模型与问题发现
+
+本节建议写：
+
+1. V1 原始基线模型配置
+2. V1 在 test/challenge 上的初始结果
+3. 通过图和时序观察发现的主要问题
+4. 核心问题是模型能粗定位异常区域，但故障邻域误报过多
+
+可引用图：
+
+1. figures/refined_diagnostic_overview.png
+2. figures/refined_run_breakdown.png
+3. figures/v1_test_plot.png
+4. figures/v1_challenge_plot.png
+
+3. 版本化改进过程
+
+建议按以下顺序写：
+
+V2：
+
+1. 加入连续异常后处理
+2. 加入事件级命中评估
+3. 说明 V2 相比 V1 的收益与不足
+
+V3：
+
+1. 扩大 contamination 与后处理搜索
+2. 做窗口覆盖率分析
+3. 在高覆盖和误报控制之间选择平衡配置
+4. 说明为什么 V3 成为主版本
+
+V4：
+
+1. 分析 V3 中 kill 与 pause 的差异
+2. 加入 fault-aware 选型
+3. 说明 V4 为什么能提升 pause_hit_rate
+4. 说明 V4 为什么暂时不能替代 V3
+
+可引用图：
+
+1. figures/v2_test_plot.png
+2. figures/v2_challenge_plot.png
+3. figures/v3_test_plot.png
+4. figures/v3_challenge_plot.png
+5. figures/v4_test_plot.png
+6. figures/v4_challenge_plot.png
+
+4. 统一定量对比
+
+本节建议主表直接使用：
+
+1. tables/v1_to_v4_stage_comparison.csv
+
+建议重点展示指标：
+
+1. precision
+2. recall
+3. f1
+4. anomaly_ratio
+5. event_hit_rate
+6. kill_hit_rate
+7. pause_hit_rate
+
+5. 消融实验
+
+建议分两部分写：
+
+特征消融：
+
+1. 从 V1 的轻量特征组
+2. 到 V3/V4 中 full_features 的优势
+3. 解释为什么最终保留 full_features
+
+后处理消融：
+
+1. 对比 streak_2 与 streak_3
+2. 对比是否引入平滑投票
+3. 说明高覆盖配置为什么不适合作为主版本
+
+可直接参考：
+
+1. ablation_and_robustness_summary.txt
+
+6. 稳健性与误差分析
+
+建议重点写：
+
+1. test 与 challenge 的差异
+2. run_009 与 run_010 的困难性
+3. V4 对 pause 的改善和随之带来的代价
+4. 当前模型仍然最难处理的是复杂恢复段和相邻故障重叠段
+
+7. 最终版本结论
+
+这里建议明确写死：
+
+1. 主版本为 V3
+2. V4 为专项补充版本
+
+推荐结论表达方式：
+
+1. V3 在误报控制和跨阶段稳定性方面最平衡
+2. V4 证明了 fault-aware 优化能够改善 pause 弱项
+3. 但 V4 尚未在 challenge 集上形成稳定优势
+
+8. 后续工作
+
+建议只保留少量、清晰的后续方向：
+
+1. pause 专项特征
+2. 更细粒度的局部后处理
+3. 复杂轮次恢复段误报来源分析
+
+9. 一句话收尾
+
+建议最后总结为：
+
+本实验已经从“Isolation Forest 能否检测故障”推进到“不同分析版本如何在误报控制、事件覆盖和故障类型公平性之间取得平衡”，并最终确定 V3 为当前最稳健的主版本。

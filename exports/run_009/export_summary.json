@@ -1,0 +1,30 @@
+[
+  {
+    "series_count": 21,
+    "pod_count": 21,
+    "point_count": 3325,
+    "metric_name": "cpu",
+    "row_count": 3325
+  },
+  {
+    "series_count": 21,
+    "pod_count": 21,
+    "point_count": 3333,
+    "metric_name": "memory",
+    "row_count": 3333
+  },
+  {
+    "series_count": 0,
+    "pod_count": 0,
+    "point_count": 0,
+    "metric_name": "net_rx",
+    "row_count": 0
+  },
+  {
+    "series_count": 0,
+    "pod_count": 0,
+    "point_count": 0,
+    "metric_name": "net_tx",
+    "row_count": 0
+  }
+]

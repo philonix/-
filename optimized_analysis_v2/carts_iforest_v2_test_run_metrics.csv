@@ -1,0 +1,4 @@
+points,fault_window_points,anomaly_points,tp,fp,fn,precision,recall,f1,anomaly_ratio,run_id
+187,13,34,2,32,11,0.0588,0.1538,0.0851,0.1818,run_002
+246,16,106,10,96,6,0.0943,0.625,0.1639,0.4309,run_004
+193,12,24,4,20,8,0.1667,0.3333,0.2222,0.1244,run_006

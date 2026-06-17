@@ -1,0 +1,70 @@
+Isolation Forest V3 调参与后处理优化说明
+
+1. V3 的调整目标
+
+V3 在不修改原始实验数据的前提下，同时扩大了模型参数与后处理搜索范围。
+主要考虑以下现实约束：
+- 每轮包含 15 个异常事件
+- 单轮总时长约 50~67 分钟
+- 事件之间间隔只有 30~90 秒
+- cooldown 时间较短，故障效应与恢复效应容易彼此粘连
+
+2. 对 contamination 合理性的重新判断
+
+- validation 严格故障窗口覆盖率 = 0.0639
+- validation 扩展 +/-120 秒后的覆盖率 = 0.3151
+- 这说明如果只按严格故障窗口看，异常占比并不高；
+- 但如果把故障邻域与恢复效应考虑进来，有效异常区域会明显变宽；
+- 因此 V2 只搜索到 0.08 的 contamination 偏保守，V3 扩展到 0.02~0.12 更合理。
+
+3. V3 的两类代表配置
+
+- 高覆盖配置: n_estimators=500, contamination=0.12, postprocess=streak_2_smooth_3_vote_2, event_hit_rate=1.0, anomaly_ratio=0.6275
+- 平衡配置: n_estimators=100, contamination=0.02, postprocess=streak_3, event_hit_rate=0.4444, anomaly_ratio=0.1424
+- V3 最终推荐使用平衡配置，避免异常比例被推得过高。
+
+4. V3 最终推荐配置
+
+- n_estimators = 100
+- contamination = 0.02
+- feature_set = full_features
+- postprocess = streak_3
+- min_streak = 3
+- smooth_window = 1
+- vote_threshold = 1
+
+5. 阶段级结果
+
+- validation: precision=0.1628, recall=0.1433, f1=0.1184, event_hit_rate=0.4444
+- test: precision=0.3837, recall=0.1506, f1=0.1838, event_hit_rate=0.4444
+- challenge: precision=0.134, recall=0.2268, f1=0.1646, event_hit_rate=0.5833
+
+6. 参数合理性结论
+
+- 如果 contamination 太低，模型更容易漏掉相邻事件之间的异常拖尾；
+- 如果 contamination 太高，在短 cooldown 场景下又会把恢复期大量打成异常；
+- 因此 contamination 需要和后处理一起看，而不是单独看模型输出；
+- V3 的目标就是先允许模型稍微敏感一些，再用更强的时序后处理收缩误报边界。
+- 当前平衡配置把 avg_anomaly_ratio 控制在 <= 0.45 的范围内，更适合做主版本。
+
+7. 验证集前 5 组参数 + 后处理结果
+
+- n_estimators=500, contamination=0.12, postprocess=streak_2_smooth_3_vote_2, selection_score=0.2303, precision=0.0557, recall=0.5849, f1=0.1011, event_hit_rate=1.0, anomaly_ratio=0.6275
+- n_estimators=500, contamination=0.12, postprocess=streak_2, selection_score=0.227, precision=0.0551, recall=0.5611, f1=0.0997, event_hit_rate=1.0, anomaly_ratio=0.6126
+- n_estimators=500, contamination=0.12, postprocess=streak_4_smooth_5_vote_3, selection_score=0.2224, precision=0.0608, recall=0.5626, f1=0.1085, event_hit_rate=0.8889, anomaly_ratio=0.5536
+- n_estimators=500, contamination=0.12, postprocess=streak_3_smooth_3_vote_2, selection_score=0.2199, precision=0.0586, recall=0.5626, f1=0.1051, event_hit_rate=0.8889, anomaly_ratio=0.5742
+- n_estimators=500, contamination=0.12, postprocess=streak_3_smooth_5_vote_3, selection_score=0.2193, precision=0.058, recall=0.5626, f1=0.1042, event_hit_rate=0.8889, anomaly_ratio=0.5804
+
+8. 验证集前 5 组特征结果
+
+- feature=full_features, selection_score=0.1624, precision=0.1628, recall=0.1433, f1=0.1184, event_hit_rate=0.4444, anomaly_ratio=0.1424
+- feature=stat_enhanced, selection_score=0.145, precision=0.1115, recall=0.1433, f1=0.1066, event_hit_rate=0.4444, anomaly_ratio=0.1513
+- feature=cpu_memory, selection_score=0.0903, precision=0.0344, recall=0.0921, f1=0.0496, event_hit_rate=0.4444, anomaly_ratio=0.1202
+- feature=rate_only, selection_score=0.0886, precision=0.0629, recall=0.0921, f1=0.0743, event_hit_rate=0.2222, anomaly_ratio=0.0621
+- feature=rate_plus_rolling, selection_score=0.0698, precision=0.0363, recall=0.0921, f1=0.0519, event_hit_rate=0.2222, anomaly_ratio=0.1071
+
+9. 当前建议
+
+- 如果 V3 的 challenge 提升而 test 没同步提升，说明当前优化更偏向提高覆盖率；
+- 如果希望继续压误报，优先收紧 postprocess，再观察 event_hit_rate 是否明显下降；
+- 如果 challenge 仍明显弱于 test，下一步应优先做 kill/pause 分类型优化。

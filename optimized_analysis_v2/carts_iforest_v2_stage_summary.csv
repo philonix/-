@@ -1,0 +1,4 @@
+stage,best_n_estimators,best_contamination,selected_feature_set,avg_precision,avg_recall,avg_f1,event_hit_rate,postprocess_min_streak
+validation,300,0.08,full_features,0.0639,0.3703,0.1072,0.7778,2
+test,300,0.08,full_features,0.1066,0.3707,0.1571,0.7778,2
+challenge,300,0.08,full_features,0.0903,0.3618,0.1421,0.6667,2

@@ -1,0 +1,55 @@
+冻结模型后的后续实验整理目录
+
+1. 目录目的
+
+本目录用于承接“模型优化先停止，继续完成后续实验验证”的整理工作。
+
+当前版本结论固定为：
+
+1. V3 作为当前主版本
+2. V4 作为 pause 定向优化的补充版本
+3. 后续不再继续扩大调参，而是转向对比、消融、稳健性与最终定量结论整理
+
+2. 当前目录内容
+
+figures/
+
+1. refined_diagnostic_overview.png
+   - 早期精炼分析的总体诊断图
+2. refined_run_breakdown.png
+   - 早期精炼分析的分轮次指标图
+3. v1_test_plot.png / v1_challenge_plot.png
+   - 原始版本 V1 的测试集与挑战集时序图
+4. v2_test_plot.png / v2_challenge_plot.png
+   - V2 后处理版本的测试集与挑战集时序图
+5. v3_test_plot.png / v3_challenge_plot.png
+   - V3 平衡版本的测试集与挑战集时序图
+6. v4_test_plot.png / v4_challenge_plot.png
+   - V4 fault-aware 版本的测试集与挑战集时序图
+
+tables/
+
+1. v1_to_v4_stage_comparison.csv
+   - V1/V2/V3/V4 在 validation/test/challenge 上的统一对比表
+
+文本说明文件：
+
+1. version_comparison_summary.txt
+   - 版本间主结论、指标变化和当前主版本建议
+2. ablation_and_robustness_summary.txt
+   - 特征组、后处理、稳健性与困难轮次分析
+3. final_report_outline.txt
+   - 后续总报告可直接复用的结构草案
+
+3. 使用建议
+
+建议按以下顺序查看本目录：
+
+1. 先看 v1_to_v4_stage_comparison.csv
+2. 再看 version_comparison_summary.txt
+3. 然后结合 figures/ 中的 v1~v4 图做现象解释
+4. 最后看 ablation_and_robustness_summary.txt 和 final_report_outline.txt
+
+4. 当前一句话结论
+
+当前后续实验的主线不是继续追求更高的调参分数，而是把已经得到的 V1/V2/V3/V4 结果转化为可解释、可比较、可写入最终报告的定量结论。

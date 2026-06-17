@@ -1,0 +1,162 @@
+Isolation Forest V1 vs V2 对比说明
+
+1. 文件说明
+
+本次优化没有修改原版 isf.py。
+
+保留的原版脚本：
+- e:\code\PycharmProjects\software_test\isolationforest\isf.py
+
+新增的新版脚本：
+- e:\code\PycharmProjects\software_test\isolationforest\isf_v2_postprocess.py
+
+新版结果目录：
+- e:\code\PycharmProjects\software_test\isolationforest\optimized_analysis_v2
+
+2. V2 的核心变化
+
+V2 不是重新采集数据，也不是改标签，而是在原有分析流程上增加两类分析层优化：
+
+1. 连续异常后处理
+   - 仅保留连续异常长度 >= 2 的片段
+   - 去掉孤立异常点
+
+2. 事件级评估
+   - 在点级 precision / recall / F1 之外
+   - 新增 event hit rate
+   - 对故障窗口前后允许 60 秒容忍带
+
+V2 当前固定参数：
+- POSTPROCESS_MIN_STREAK = 2
+- EVENT_TOLERANCE_SECONDS = 60
+
+3. 最终最优配置对比
+
+V1 最优配置：
+- n_estimators = 300
+- contamination = 0.08
+- feature_set = rate_plus_rolling
+
+V2 最优配置：
+- n_estimators = 300
+- contamination = 0.08
+- feature_set = full_features
+
+说明：
+- 参数最优值没有变化
+- 但在加入后处理和事件级评估后，验证集最优特征组从 rate_plus_rolling 变成了 full_features
+
+4. 阶段级结果对比
+
+V1:
+- validation: precision=0.0753, recall=0.4896, f1=0.1291
+- test: precision=0.0849, recall=0.2665, f1=0.1272
+- challenge: precision=0.0941, recall=0.2567, f1=0.1343
+
+V2:
+- validation: precision=0.0639, recall=0.3703, f1=0.1072, event_hit_rate=0.7778
+- test: precision=0.1066, recall=0.3707, f1=0.1571, event_hit_rate=0.7778
+- challenge: precision=0.0903, recall=0.3618, f1=0.1421, event_hit_rate=0.6667
+
+直接结论：
+
+1. 测试集提升最明显
+   - precision: 0.0849 -> 0.1066
+   - recall: 0.2665 -> 0.3707
+   - f1: 0.1272 -> 0.1571
+
+2. 挑战集有小幅提升
+   - recall: 0.2567 -> 0.3618
+   - f1: 0.1343 -> 0.1421
+   - precision 略降: 0.0941 -> 0.0903
+
+3. 验证集点级指标反而下降
+   - 说明 V2 的收益主要体现在真正独立的测试与挑战阶段
+   - 也说明当前优化还不够稳定，不能简单认为误报问题已经彻底解决
+
+5. 分轮次结果对比
+
+测试集 V1 -> V2:
+- run_002: f1 0.0833 -> 0.0851
+- run_004: f1 0.1124 -> 0.1639
+- run_006: f1 0.1860 -> 0.2222
+
+挑战集 V1 -> V2:
+- run_007: f1 0.2373 -> 0.1918
+- run_008: f1 0.1474 -> 0.1754
+- run_009: f1 0.1000 -> 0.1379
+- run_010: f1 0.0526 -> 0.0632
+
+说明：
+- V2 对测试集 3 个轮次都带来了提升
+- 挑战集中 4 个轮次里有 3 个提升，run_007 出现回落
+- run_010 仍然最难，说明随机性更强、复合度更高的轮次依旧是当前短板
+
+6. 事件级命中结果
+
+测试集事件级命中：
+- overall hit rate = 0.7778
+- run_002 = 1.0000
+- run_004 = 1.0000
+- run_006 = 0.3333
+- kill = 1.0000
+- pause = 0.5000
+
+挑战集事件级命中：
+- overall hit rate = 0.6667
+- run_007 = 0.6667
+- run_008 = 1.0000
+- run_009 = 0.6667
+- run_010 = 0.3333
+- kill = 0.8333
+- pause = 0.5000
+
+这说明：
+
+1. V2 已经不只是“有些点被打中”，而是多数故障事件本身能被覆盖到
+2. kill 故障比 pause 故障更容易被命中
+3. pause 仍然是当前较弱的故障类型
+
+7. 对误报问题的真实判断
+
+V2 相比 V1 的确有进步，但不能得出“误报已经被很好控制”的结论。
+
+更准确的判断应该是：
+
+1. V2 改善了测试集上的点级综合效果
+2. V2 提供了事件级命中率这个更符合实验目标的评价维度
+3. 模型依然存在故障邻域扩张的问题
+4. 某些轮次中异常点比例仍然偏高，说明异常边界仍然较宽
+
+换句话说，V2 更像是：
+- 让模型更稳定地碰到故障事件
+- 并在测试集上取得更好的 precision / recall 平衡
+- 但还没有把故障前后误报压缩到很理想的程度
+
+8. 当前最合理的结论
+
+目前可以比较稳妥地得出以下结论：
+
+1. 原始实验数据无需重采，也无需改标签
+2. 在不改原数据的前提下，分析层优化是有效的
+3. V2 比 V1 更适合作为当前阶段的主分析版本
+4. 但 V2 仍属于“粗定位 + 事件命中较好”的方案，不是高精度低误报方案
+
+9. 下一步建议
+
+如果继续做 V3，建议优先尝试以下方向：
+
+1. 将连续异常阈值从 2 提高到 3，再比较 test / challenge 的 event hit rate 与 f1
+2. 在保持事件命中率不明显下降的前提下，尝试更低 contamination
+3. 对 pause 和 kill 分开做结果统计，确认是否需要针对 pause 单独优化
+4. 继续保留事件级评估，不再只看点级 F1
+
+10. 推荐优先查看的文件
+
+1. carts_iforest_v2_stage_summary.csv
+2. carts_iforest_v2_test_run_metrics.csv
+3. carts_iforest_v2_challenge_run_metrics.csv
+4. carts_iforest_v2_test_event_summary.csv
+5. carts_iforest_v2_challenge_event_summary.csv
+6. carts_iforest_v2_test_plot.png
+7. carts_iforest_v2_challenge_plot.png

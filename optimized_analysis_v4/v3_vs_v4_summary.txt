@@ -1,0 +1,125 @@
+Isolation Forest V3 与 V4 对比总结
+
+1. 对比目的
+
+V3 和 V4 都不是对原始数据的修改，而是在同一批实验数据上的不同优化方向：
+
+1. V3 的目标是控制误报，收紧异常边界
+2. V4 的目标是在不让异常比例完全失控的前提下，显式提升 pause 类型故障的命中能力
+
+因此，这两个版本并不是简单的“新版本一定替代旧版本”，而更像是两种不同优化偏好的代表。
+
+2. 两个版本的核心区别
+
+V3：
+
+1. 主思路是误报控制优先
+2. 最终主配置为 n_estimators=100、contamination=0.02、postprocess=streak_3
+3. 特点是 precision 高、anomaly_ratio 低、事件覆盖偏保守
+
+V4：
+
+1. 主思路是 fault-aware 选型
+2. 最终主配置为 n_estimators=100、contamination=0.08、postprocess=streak_3
+3. 特点是 recall 更高、pause 命中更高、异常比例也更高
+
+3. 阶段级结果对比
+
+validation：
+
+1. V3：precision=0.1628，recall=0.1433，f1=0.1184，anomaly_ratio=0.1424，event_hit_rate=0.4444，kill_hit_rate=0.6，pause_hit_rate=0.25
+2. V4：precision=0.0701，recall=0.3941，f1=0.1158，anomaly_ratio=0.3495，event_hit_rate=0.7778，kill_hit_rate=0.8，pause_hit_rate=0.75
+
+test：
+
+1. V3：precision=0.3837，recall=0.1506，f1=0.1838，anomaly_ratio=0.0890，event_hit_rate=0.4444，kill_hit_rate=0.6，pause_hit_rate=0.25
+2. V4：precision=0.1475，recall=0.3707，f1=0.1861，anomaly_ratio=0.2280，event_hit_rate=0.7778，kill_hit_rate=1.0，pause_hit_rate=0.5
+
+challenge：
+
+1. V3：precision=0.1340，recall=0.2268，f1=0.1646，anomaly_ratio=0.1343，event_hit_rate=0.5833，kill_hit_rate=0.8333，pause_hit_rate=0.3333
+2. V4：precision=0.0971，recall=0.3618，f1=0.1493，anomaly_ratio=0.2764，event_hit_rate=0.6667，kill_hit_rate=0.8333，pause_hit_rate=0.5
+
+4. 最关键的结论
+
+第一点：V4 确实补上了 pause 的弱项
+
+1. test pause_hit_rate：0.25 -> 0.50
+2. challenge pause_hit_rate：0.3333 -> 0.50
+3. validation pause_hit_rate：0.25 -> 0.75
+
+这说明 V4 的 fault-aware 选型不是无效调参，而是确实起到了针对性作用。
+
+第二点：V4 也提高了事件级覆盖
+
+1. test event_hit_rate：0.4444 -> 0.7778
+2. challenge event_hit_rate：0.5833 -> 0.6667
+
+这意味着 V4 更愿意把故障邻域打成异常，因此整体覆盖能力更强。
+
+第三点：V4 的代价是误报明显回升
+
+1. test anomaly_ratio：0.0890 -> 0.2280
+2. challenge anomaly_ratio：0.1343 -> 0.2764
+3. precision 在 test 和 challenge 都低于 V3
+
+因此，V4 的提升不是“免费”的，而是通过扩大异常覆盖换来的。
+
+第四点：V4 没有在 challenge 上稳定超过 V3
+
+1. test f1：0.1838 -> 0.1861，只有小幅提升
+2. challenge f1：0.1646 -> 0.1493，反而回落
+
+这说明 V4 更像针对 test 与 pause 弱项的修正版，而不是已经在复杂场景下全面胜出的统一方案。
+
+5. 逐轮观察
+
+test 集：
+
+1. V4 在 run_004 上 recall 提升明显，但异常比例升到 0.4512，误报较多
+2. V4 在 run_006 上比 V3 更愿意报异常，因此 precision 明显下降
+3. V4 在事件级上对 run_002 和 run_004 的命中更完整
+
+challenge 集：
+
+1. V4 对 run_009 的事件命中和 recall 有改善
+2. run_010 仍然是两个版本都比较困难的轮次
+3. V4 在复杂挑战场景下仍然容易把恢复段和邻近正常段卷入异常
+
+6. 版本定位
+
+如果按“误报控制优先”的目标看：
+
+1. V3 更好
+2. 它的 anomaly_ratio 更低
+3. 它的 precision 更高
+4. 它在 test 和 challenge 上都有更稳的点级表现
+
+如果按“不要牺牲 pause”的目标看：
+
+1. V4 更好
+2. 它显著提升了 pause_hit_rate
+3. 它在 event_hit_rate 上也更强
+4. 它证明了 fault-aware 选型值得继续做
+
+7. 当前主版本建议
+
+当前建议如下：
+
+1. 主版本建议仍选 V3
+2. 原因是 V3 更符合当前最核心的目标，即控制误报并保持较稳的泛化结果
+3. V4 建议作为专项优化版本保留
+4. 如果后续论文或报告要体现“分类型优化”和“pause 弱项修复”，V4 非常适合作为后续版本进行展示
+
+8. 下一步建议
+
+如果继续做下一版，建议不要在 V3 和 V4 之间简单二选一后停止，而是把 V4 的思路做得更细：
+
+1. 增加 pause 专项特征
+2. 分析 pause 命中提升时，哪些误报点一并被放大
+3. 尝试更细的局部后处理，而不是统一放宽整个时间序列
+4. 保留 V3 作为稳健基线，继续把 V4 作为 pause-aware 路线推进
+
+一句话结论：
+
+V3 是当前更稳健的主版本，V4 是已经证明有效但仍需继续收敛误报的 pause-aware 优化版本。

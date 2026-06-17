@@ -1,0 +1,10 @@
+[
+  {
+    "run_id": "run_005",
+    "started_at": "2026-06-17 00:48:11",
+    "runner_exit_code": 0,
+    "export_exit_code": 1,
+    "status": "export_failed",
+    "finished_at": "2026-06-17 01:41:39"
+  }
+]

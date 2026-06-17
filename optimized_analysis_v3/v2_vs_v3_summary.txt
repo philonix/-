@@ -1,0 +1,163 @@
+Isolation Forest V2 vs V3 对比说明
+
+1. 对比对象
+
+V2:
+- 脚本: e:\code\PycharmProjects\software_test\isolationforest\isf_v2_postprocess.py
+- 结果目录: e:\code\PycharmProjects\software_test\isolationforest\optimized_analysis_v2
+
+V3:
+- 脚本: e:\code\PycharmProjects\software_test\isolationforest\isf_v3_tuned.py
+- 结果目录: e:\code\PycharmProjects\software_test\isolationforest\optimized_analysis_v3
+
+2. V3 相比 V2 的核心新增点
+
+V3 除了保留 V2 的连续异常过滤和事件级评估外，又增加了：
+
+1. 更宽的参数搜索范围
+   - contamination 从 0.02 扩展到 0.12
+   - n_estimators 扩展到 500
+
+2. 更强的后处理搜索
+   - min_streak 不再只看 2
+   - 同时搜索 streak=2/3/4
+   - 增加时序平滑与投票过滤
+
+3. 参数合理性分析
+   - 计算严格故障窗口覆盖率
+   - 计算扩展容忍带后的覆盖率
+   - 用于判断 contamination 是否过低或过高
+
+4. 双配置结论
+   - 高覆盖配置
+   - 平衡配置
+   - 最终以平衡配置作为主推荐版本
+
+3. V2 最终配置
+
+- n_estimators = 300
+- contamination = 0.08
+- feature_set = full_features
+- postprocess = streak_2
+
+V2 阶段结果：
+- validation: precision=0.0639, recall=0.3703, f1=0.1072, event_hit_rate=0.7778
+- test: precision=0.1066, recall=0.3707, f1=0.1571, event_hit_rate=0.7778
+- challenge: precision=0.0903, recall=0.3618, f1=0.1421, event_hit_rate=0.6667
+
+4. V3 主推荐配置
+
+V3 最终没有选择高覆盖配置，而是选择平衡配置作为主版本：
+
+- n_estimators = 100
+- contamination = 0.02
+- feature_set = full_features
+- postprocess = streak_3
+
+V3 阶段结果：
+- validation: precision=0.1628, recall=0.1433, f1=0.1184, event_hit_rate=0.4444
+- test: precision=0.3837, recall=0.1506, f1=0.1838, event_hit_rate=0.4444
+- challenge: precision=0.1340, recall=0.2268, f1=0.1646, event_hit_rate=0.5833
+
+5. V2 与 V3 的直接对比
+
+validation:
+- precision: 0.0639 -> 0.1628
+- recall: 0.3703 -> 0.1433
+- f1: 0.1072 -> 0.1184
+- event_hit_rate: 0.7778 -> 0.4444
+
+test:
+- precision: 0.1066 -> 0.3837
+- recall: 0.3707 -> 0.1506
+- f1: 0.1571 -> 0.1838
+- event_hit_rate: 0.7778 -> 0.4444
+
+challenge:
+- precision: 0.0903 -> 0.1340
+- recall: 0.3618 -> 0.2268
+- f1: 0.1421 -> 0.1646
+- event_hit_rate: 0.6667 -> 0.5833
+
+6. 如何解释这些变化
+
+V3 主推荐版本的变化趋势非常明确：
+
+1. precision 明显上升
+   - 说明误报被压缩了
+   - 尤其 test 集提升最明显
+
+2. recall 明显下降
+   - 说明 V3 更保守
+   - 会漏掉一部分故障邻域异常点
+
+3. f1 反而仍然上升
+   - 说明当前实验的主要瓶颈确实是误报过多
+   - 收紧异常边界比继续追求覆盖更多异常点更有价值
+
+4. event hit rate 下降
+   - 说明更严格的后处理会牺牲事件命中
+   - 这也是 V3 的代价
+
+7. 为什么 V3 选择 contamination=0.02
+
+看起来 0.02 很低，但它并不是简单地“参数越小越好”，而是和更严格的后处理一起被选出来的。
+
+当前数据特点是：
+- 严格故障窗口覆盖率只有约 6%~7%
+- 但扩展到 +/-120 秒后可上升到 28%~32%
+
+这意味着：
+- 如果目标是做高覆盖率检测，确实可以把 contamination 提高到 0.10~0.12
+- 但那样会把大量恢复段和邻接段也打成异常
+- 如果目标是控制误报，较低 contamination + 更严格 streak 过滤更合理
+
+因此 V3 的推荐配置更偏向：
+- 低误报
+- 更清晰的异常边界
+- 更适合做主分析版本
+
+8. V3 的不足
+
+V3 并不是全面优于 V2。
+
+它的不足主要是：
+
+1. 事件级命中率下降
+2. pause 类型依然比 kill 更难命中
+3. test 集中 run_002、run_004 仍然偏弱
+4. challenge 集中 run_010 依旧最难
+
+9. 当前最合理的结论
+
+如果当前目标是：
+
+1. 减少故障邻域误报
+2. 收紧异常边界
+3. 提高点级 precision 和综合 F1
+
+那么：
+- V3 比 V2 更适合作为当前主版本
+
+如果当前目标是：
+
+1. 尽量不要漏掉事件
+2. 更强调故障事件覆盖率
+
+那么：
+- V2 甚至 V3 的高覆盖配置更适合作为补充参考
+
+10. 建议的后续方向
+
+建议下一步不要再盲目扩大 contamination，而是做以下两类实验：
+
+1. kill / pause 分类型优化
+   - 因为 pause 一直比 kill 更难
+
+2. V3 与高覆盖配置双轨汇报
+   - 主结果使用 V3 平衡配置
+   - 附录补充高覆盖配置
+
+一句话结论：
+
+V2 更像“覆盖优先”的版本，V3 更像“误报控制优先”的版本；在你当前最关心误报的问题上，V3 更接近你真正想要的方向。

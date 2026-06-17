@@ -1,0 +1,6 @@
+avg_precision,avg_recall,avg_f1,avg_anomaly_ratio,n_estimators,contamination,feature_set,postprocess_min_streak,event_hit_rate,feature_name
+0.0639,0.3703,0.1072,0.353,300,0.08,"cpu_rate,rolling_mean,rolling_std,rolling_median,rolling_min,rolling_max,rolling_range,rolling_q25,rolling_q75,rolling_iqr,abs_rate_change,ema_rate,ema_deviation,rate_zscore,relative_to_mean,memory_value,memory_diff,memory_change_rate,memory_rolling_mean,memory_rolling_std,memory_rolling_median,memory_rolling_min,memory_rolling_max,memory_rolling_range,memory_rolling_q25,memory_rolling_q75,memory_rolling_iqr,memory_zscore,memory_relative_to_mean,pod_age_points,is_new_pod_window",2,0.7778,full_features
+0.0657,0.2545,0.1045,0.249,300,0.08,"cpu_rate,rolling_mean,rolling_std,abs_rate_change",2,0.6667,rate_plus_rolling
+0.0605,0.21,0.0936,0.2237,300,0.08,"cpu_rate,rolling_mean,rolling_std,abs_rate_change,memory_value,memory_diff,memory_change_rate,memory_rolling_mean,memory_rolling_std,memory_rolling_range,memory_zscore",2,0.5556,cpu_memory
+0.0483,0.3021,0.0821,0.3983,300,0.08,"cpu_rate,rolling_mean,rolling_std,rolling_median,rolling_range,rolling_iqr,abs_rate_change,rate_zscore",2,0.7778,stat_enhanced
+0.0449,0.1397,0.0677,0.1325,300,0.08,cpu_rate,2,0.4444,rate_only

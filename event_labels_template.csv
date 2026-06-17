@@ -1,0 +1,6 @@
+run_id,event_id,run_type,service,target,fault_type,intensity,start_time,end_time,baseline_start,baseline_end,observe_end,expected_fault_window_start,expected_fault_window_end,status,notes
+run_001,event_01,single_fault_serial,carts,auto_select,kill,-,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,planned,"示例：第一个事件，对 carts 服务执行 kill"
+run_001,event_02,single_fault_serial,orders,auto_select,kill,-,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,planned,"示例：第二个事件，对 orders 服务执行 kill"
+run_001,event_03,single_fault_serial,front-end,auto_select,kill,-,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,planned,"示例：第三个事件，对 front-end 服务执行 kill"
+run_007,event_01,composite_serial,carts,auto_select,network_delay,200ms,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,planned,"复合实验示例：先 delay"
+run_007,event_02,composite_serial,carts,auto_select,kill,-,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS,planned,"复合实验示例：后 kill"

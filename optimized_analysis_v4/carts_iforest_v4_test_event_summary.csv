@@ -1,0 +1,7 @@
+group,name,events,hits,hit_rate
+overall,all,9,7,0.7778
+run_id,run_002,3,3,1.0
+run_id,run_004,3,3,1.0
+run_id,run_006,3,1,0.3333
+fault_type,kill,5,5,1.0
+fault_type,pause,4,2,0.5

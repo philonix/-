@@ -1,0 +1,65 @@
+Isolation Forest V4 fault-aware 优化说明
+
+1. V4 的目标
+
+V4 延续 V3 的平衡思路，但不再只看 overall 指标。
+本版重点解决的问题是：
+- pause 类型故障命中率长期低于 kill
+- 更严格的平衡配置虽然提升 precision，但会过度牺牲 pause 命中
+- 因此参数选择需要显式考虑 fault_type 差异
+
+2. V4 的核心变化
+
+- 保留 V3 的基础参数与后处理联合搜索框架
+- 在验证集上新增 kill_hit_rate 与 pause_hit_rate
+- 选择主配置时优先考虑 pause_hit_rate，而不是只看总 event_hit_rate
+- 同时继续约束 avg_anomaly_ratio <= 0.4
+
+3. 覆盖率背景
+
+- validation 严格故障窗口覆盖率 = 0.0639
+- validation 扩展 +/-120 秒后的覆盖率 = 0.3151
+- 说明异常邻域仍然存在，但 V4 更关注不同故障类型之间的检测公平性。
+
+4. 两类代表配置
+
+- 高覆盖配置: n_estimators=300, contamination=0.12, postprocess=streak_2_smooth_5_vote_2, event_hit_rate=1.0, pause_hit_rate=1.0, anomaly_ratio=0.7187
+- fault-aware 主配置: n_estimators=100, contamination=0.08, postprocess=streak_3, event_hit_rate=0.7778, pause_hit_rate=0.75, anomaly_ratio=0.3495
+
+5. V4 最终推荐配置
+
+- n_estimators = 100
+- contamination = 0.08
+- feature_set = full_features
+- postprocess = streak_3
+- min_streak = 3
+- smooth_window = 1
+- vote_threshold = 1
+
+6. 阶段级结果
+
+- validation: precision=0.0701, recall=0.3941, f1=0.1158, event_hit_rate=0.7778, kill_hit_rate=0.8, pause_hit_rate=0.75
+- test: precision=0.1475, recall=0.3707, f1=0.1861, event_hit_rate=0.7778, kill_hit_rate=1.0, pause_hit_rate=0.5
+- challenge: precision=0.0971, recall=0.3618, f1=0.1493, event_hit_rate=0.6667, kill_hit_rate=0.8333, pause_hit_rate=0.5
+
+7. 验证集前 5 组参数 + 后处理结果
+
+- n_estimators=300, contamination=0.12, postprocess=streak_2_smooth_5_vote_2, score=0.4823, precision=0.0574, recall=0.6788, f1=0.1055, event_hit_rate=1.0, kill_hit_rate=1.0, pause_hit_rate=1.0, anomaly_ratio=0.7187
+- n_estimators=200, contamination=0.12, postprocess=streak_2_smooth_5_vote_2, score=0.4821, precision=0.0572, recall=0.6788, f1=0.105, event_hit_rate=1.0, kill_hit_rate=1.0, pause_hit_rate=1.0, anomaly_ratio=0.7225
+- n_estimators=500, contamination=0.12, postprocess=streak_2_smooth_5_vote_2, score=0.4813, precision=0.0561, recall=0.6788, f1=0.1033, event_hit_rate=1.0, kill_hit_rate=1.0, pause_hit_rate=1.0, anomaly_ratio=0.7373
+- n_estimators=200, contamination=0.12, postprocess=streak_2, score=0.4776, precision=0.0582, recall=0.5849, f1=0.1048, event_hit_rate=1.0, kill_hit_rate=1.0, pause_hit_rate=1.0, anomaly_ratio=0.6029
+- n_estimators=300, contamination=0.12, postprocess=streak_2_smooth_3_vote_2, score=0.4767, precision=0.057, recall=0.5849, f1=0.1029, event_hit_rate=1.0, kill_hit_rate=1.0, pause_hit_rate=1.0, anomaly_ratio=0.6156
+
+8. 验证集前 5 组特征结果
+
+- feature=full_features, score=0.382, precision=0.0701, recall=0.3941, f1=0.1158, event_hit_rate=0.7778, kill_hit_rate=0.8, pause_hit_rate=0.75, anomaly_ratio=0.3495
+- feature=stat_enhanced, score=0.3629, precision=0.0507, recall=0.3021, f1=0.0854, event_hit_rate=0.7778, kill_hit_rate=0.8, pause_hit_rate=0.75, anomaly_ratio=0.3827
+- feature=rate_plus_rolling, score=0.3299, precision=0.0525, recall=0.2545, f1=0.0857, event_hit_rate=0.6667, kill_hit_rate=0.6, pause_hit_rate=0.75, anomaly_ratio=0.3172
+- feature=cpu_memory, score=0.2633, precision=0.06, recall=0.1433, f1=0.0816, event_hit_rate=0.5556, kill_hit_rate=0.6, pause_hit_rate=0.5, anomaly_ratio=0.18
+- feature=rate_only, score=0.0979, precision=0.0469, recall=0.0921, f1=0.062, event_hit_rate=0.2222, kill_hit_rate=0.4, pause_hit_rate=0.0, anomaly_ratio=0.0827
+
+9. 当前结论
+
+- V4 不是重新追求全局高覆盖，而是让 pause 不至于在选型阶段被系统性牺牲。
+- 如果 V4 的 pause_hit_rate 提升且 F1 仍稳定，就说明 fault-aware 选型是有效的。
+- 如果 pause 提升但 precision 明显恶化，下一步应做更细的 pause 专项特征或窗口策略。

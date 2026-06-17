@@ -1,0 +1,4 @@
+stage,best_n_estimators,best_contamination,selected_feature_set,postprocess_name,postprocess_min_streak,postprocess_smooth_window,postprocess_vote_threshold,avg_precision,avg_recall,avg_f1,avg_anomaly_ratio,event_hit_rate,kill_hit_rate,pause_hit_rate,fault_aware_score
+validation,100,0.08,full_features,streak_3,3,1,1,0.0701,0.3941,0.1158,0.3495,0.7778,0.8,0.75,0.382
+test,100,0.08,full_features,streak_3,3,1,1,0.1475,0.3707,0.1861,0.228,0.7778,1.0,0.5,0.391
+challenge,100,0.08,full_features,streak_3,3,1,1,0.0971,0.3618,0.1493,0.2764,0.6667,0.8333,0.5,0.3398

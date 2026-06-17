@@ -1,0 +1,28 @@
+{
+  "run_id": "run_normal_002",
+  "window_start_epoch": 1781580013,
+  "window_end_epoch": 1781580613,
+  "window_start_text": "2026-06-16 11:20:13",
+  "window_end_text": "2026-06-16 11:30:13",
+  "step": "15s",
+  "events": [
+    {
+      "run_id": "run_normal_002",
+      "event_id": "event_01",
+      "run_type": "normal_only",
+      "service": "all",
+      "target": "-",
+      "fault_type": "no_fault",
+      "intensity": "-",
+      "start_time": "2026-06-16 11:30:13",
+      "end_time": "2026-06-16 11:30:13",
+      "baseline_start": "2026-06-16 11:20:13",
+      "baseline_end": "2026-06-16 11:30:13",
+      "observe_end": "2026-06-16 11:30:13",
+      "expected_fault_window_start": "2026-06-16 11:30:13",
+      "expected_fault_window_end": "2026-06-16 11:30:13",
+      "status": "executed",
+      "notes": "纯正常实验第 2 轮，不注入故障，用于采集训练集"
+    }
+  ]
+}

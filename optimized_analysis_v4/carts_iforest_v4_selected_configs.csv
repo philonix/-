@@ -1,0 +1,3 @@
+selection_mode,n_estimators,contamination,postprocess_name,postprocess_min_streak,postprocess_smooth_window,postprocess_vote_threshold,avg_precision,avg_recall,avg_f1,avg_anomaly_ratio,event_hit_rate,kill_hit_rate,pause_hit_rate,fault_aware_score
+coverage_best,300,0.12,streak_2_smooth_5_vote_2,2,5,2,0.0574,0.6788,0.1055,0.7187,1.0,1.0,1.0,0.4823
+fault_aware_best,100,0.08,streak_3,3,1,1,0.0701,0.3941,0.1158,0.3495,0.7778,0.8,0.75,0.382
